@@ -13,6 +13,7 @@ def get_repo_column(fieldnames):
     if 'Repo Name' in fieldnames:
         return 'Repo Name'
     for col in fieldnames:
+        # Шукаємо колонку з 3 цифр (наприклад 402)
         if col and col.strip().isdigit() and len(col.strip()) == 3:
             return col
     return None
@@ -46,7 +47,7 @@ def main():
         print(f"\n📄 Обробка: {filename}")
         
         with open(input_path, mode='r', encoding='utf-8') as infile:
-            # Читаємо файл, ігноруємо помилки нульових байтів якщо є
+            # Читаємо файл, ігноруємо помилки нульових байтів
             reader = csv.DictReader((line.replace('\0','') for line in infile))
             fieldnames = reader.fieldnames
             
@@ -63,11 +64,11 @@ def main():
             
             for row in reader:
                 # --- ОСЬ ТУТ БУЛА ПОМИЛКА, ТЕПЕР ВИПРАВЛЕНО ---
-                # Використовуємо (row.get() or ''), щоб перетворити None на пустий текст
+                # (row.get() or '') перетворює None на пустий текст, щоб не було помилки
                 git_user = (row.get(COL_GIT_NAME) or '').strip()
                 repo_name = (row.get(repo_col) or '').strip()
                 
-                # Прибираємо зайві символи, якщо вони є
+                # Прибираємо зайві символи
                 git_user = git_user.replace('_', '')
                 
                 if git_user and repo_name:
@@ -78,6 +79,7 @@ def main():
                 
                 row['Status'] = status
                 rows_to_write.append(row)
+                time.sleep(0.1) # Пауза щоб не дудосити гітхаб
 
         with open(output_path, mode='w', encoding='utf-8', newline='') as outfile:
             writer = csv.DictWriter(outfile, fieldnames=out_fieldnames)
