@@ -1,0 +1,89 @@
+/**
+ * Google Apps Script: ЕКСПОРТ ДАНИХ
+ * Тільки експорт. Генерація назв тепер робиться формулами в самій таблиці.
+ */
+
+const CONFIG = {
+  githubToken: 'ghp_ТУТ_ТВІЙ_ТОКЕН', // <-- Встав сюди свій токен
+  repoOwner: 'viktorlevytskyiki2022', // <-- Твій новий логін (про який казав викладач)
+  repoName: 'csad-task1',             // Назва твого репозиторію з завданням
+  filePath: 'input/groups.csv',       // Куди класти файл
+  sheetName: 'Список',                // Ім'я вкладки
+  branch: 'main'                      // Гілка
+};
+
+function onOpen() {
+  SpreadsheetApp.getUi()
+      .createMenu('CSAD Export')
+      .addItem('Експортувати в GitHub', 'exportSheetToGitHub')
+      .addToUi();
+}
+
+function exportSheetToGitHub() {
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(CONFIG.sheetName);
+  
+  if (!sheet) { SpreadsheetApp.getUi().alert(`Вкладку "${CONFIG.sheetName}" не знайдено.`); return; }
+
+  const data = sheet.getDataRange().getValues();
+  // Перетворюємо в CSV
+  const csvContent = data.map(row => 
+    row.map(cell => {
+      let s = String(cell);
+      if (s.includes(",") || s.includes("\n") || s.includes('"')) {
+        return '"' + s.replace(/"/g, '""') + '"';
+      }
+      return s;
+    }).join(",")
+  ).join("\n");
+
+  const contentEncoded = Utilities.base64Encode(csvContent, Utilities.Charset.UTF_8);
+  
+  try {
+    // 1. Отримуємо SHA, якщо файл є
+    const fileSha = getFileSha(CONFIG.repoOwner, CONFIG.repoName, CONFIG.filePath, CONFIG.githubToken);
+    
+    // 2. Формуємо запит
+    const url = `https://api.github.com/repos/${CONFIG.repoOwner}/${CONFIG.repoName}/contents/${CONFIG.filePath}`;
+    const payload = {
+      message: `Update ${CONFIG.filePath} via Apps Script`,
+      content: contentEncoded,
+      branch: CONFIG.branch
+    };
+    if (fileSha) payload.sha = fileSha;
+
+    const options = {
+      method: 'put',
+      headers: {
+        'Authorization': 'token ' + CONFIG.githubToken,
+        'Accept': 'application/vnd.github.v3+json'
+      },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    };
+
+    const response = UrlFetchApp.fetch(url, options);
+    
+    if (response.getResponseCode() === 200 || response.getResponseCode() === 201) {
+      SpreadsheetApp.getUi().alert('✅ Успіх! Файл оновлено.');
+    } else {
+      SpreadsheetApp.getUi().alert('❌ Помилка: ' + response.getContentText());
+    }
+  } catch (e) {
+    SpreadsheetApp.getUi().alert('❌ Критична помилка: ' + e.toString());
+  }
+}
+
+function getFileSha(owner, repo, path, token) {
+  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}?ref=${CONFIG.branch}`;
+  const options = {
+    method: 'get',
+    headers: { 'Authorization': 'token ' + token, 'Accept': 'application/vnd.github.v3+json' },
+    muteHttpExceptions: true
+  };
+  const response = UrlFetchApp.fetch(url, options);
+  if (response.getResponseCode() === 200) {
+    return JSON.parse(response.getContentText()).sha;
+  }
+  return null;
+}
